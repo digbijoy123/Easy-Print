@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       !shopSlug ||
       files.length === 0 ||
       !serviceId ||
-      !paper ||
+      paper !== "A4" && paper !== "A5" && paper !== "4x6" ||
       !Number.isInteger(copies) ||
       copies < 1 ||
       copies > 99 ||
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       serviceId: service.id,
       serviceName: service.name,
       pricePerPage: service.price,
-      paper: paper as Body["paper"],
+      paper,
       copies,
       payment: "cash",
       paymentStatus: "pending",
