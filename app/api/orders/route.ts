@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "The selected service is no longer available." }, { status: 400 });
     }
 
-    const total = body.files.length * body.copies * service.price;
+    const copies = body.copies as number;
+    const total = body.files.length * copies * service.price;
     const orderId = `EP-${Date.now().toString(36).toUpperCase()}`;
 
     const order = await createOrder({
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       serviceName: service.name,
       pricePerPage: service.price,
       paper: body.paper,
-      copies: body.copies,
+      copies,
       payment: body.payment,
       paymentStatus: "pending",
       status: "queued",
