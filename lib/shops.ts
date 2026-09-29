@@ -23,23 +23,6 @@ export type ShopRecord = {
   updatedAt: string;
 };
 
-const DEMO_SHOP: ShopRecord = {
-  id: "demo",
-  slug: "demo",
-  name: "Demo Print Shop",
-  ownerName: "Easy Print",
-  ownerPhone: "",
-  activationCode: null,
-  agentToken: "demo-agent-token",
-  services: [
-    { id: "color-photo", name: "Colour Photo", price: 10, unit: "per page", active: true },
-    { id: "bw-photo", name: "Black & White", price: 5, unit: "per page", active: true },
-  ],
-  active: true,
-  createdAt: new Date(0).toISOString(),
-  updatedAt: new Date(0).toISOString(),
-};
-
 const shopPath = (slug: string) => `shops/${slug}.json`;
 const activationIndexPath = (code: string) => `indexes/activation/${hashSecret(code)}.json`;
 const agentIndexPath = (token: string) => `indexes/agent/${hashSecret(token)}.json`;
@@ -108,9 +91,7 @@ export async function updateShop(slug: string, patch: Partial<ShopRecord>) {
 }
 
 export async function getShop(slug: string) {
-  if (slug === "demo") {
-    return (await readJson<ShopRecord>(shopPath(slug))) ?? DEMO_SHOP;
-  }
+  if (!slug || slug === "demo") return null;
   return readJson<ShopRecord>(shopPath(slug));
 }
 
@@ -128,8 +109,6 @@ export async function activateShop(activationCode: string) {
 
 export async function getShopByAgentToken(token: string) {
   if (!token) return null;
-  if (token === DEMO_SHOP.agentToken) return DEMO_SHOP;
-
   const index = await readJson<{ slug: string }>(agentIndexPath(token));
   if (!index) return null;
 
