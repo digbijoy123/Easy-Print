@@ -18,56 +18,64 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as Partial<Body>;
-    uploadedFiles = Array.isArray(body.files) ? body.files : [];
+    const shopSlug = typeof body.shopSlug === "string" ? body.shopSlug : "";
+    const serviceId = typeof body.serviceId === "string" ? body.serviceId : "";
+    const paper = body.paper;
+    const payment = body.payment;
     const copies = Number(body.copies);
+    const files = Array.isArray(body.files) ? body.files : [];
+
+    uploadedFiles = files;
 
     if (
-      !body.shopSlug ||
-      !Array.isArray(body.files) ||
-      body.files.length === 0 ||
-      !body.serviceId ||
-      !body.paper ||
+      !shopSlug ||
+      files.length === 0 ||
+      !serviceId ||
+      !paper ||
       !Number.isInteger(copies) ||
       copies < 1 ||
       copies > 99 ||
-      body.payment !== "cash"
+      payment !== "cash"
     ) {
       return NextResponse.json({ ok: false, message: "Invalid order." }, { status: 400 });
     }
 
-    const shop = await getShop(body.shopSlug);
+    const shop = await getShop(shopSlug);
     if (!shop || !shop.active) {
       return NextResponse.json({ ok: false, message: "Shop not found." }, { status: 404 });
     }
 
-    const expectedPrefix = `incoming/${body.shopSlug}/`;
-    if (body.files.some((file) => !file.pathname.startsWith(expectedPrefix))) {
+    const expectedPrefix = `incoming/${shopSlug}/`;
+    if (files.some((file) => !file.pathname.startsWith(expectedPrefix))) {
       return NextResponse.json({ ok: false, message: "Invalid uploaded file." }, { status: 400 });
     }
 
-    const services = await listServices(body.shopSlug);
-    const service = services.find((item) => item.id === body.serviceId && item.active);
+    const services = await listServices(shopSlug);
+    const service = services.find((item) => item.id === serviceId && item.active);
 
     if (!service) {
-      return NextResponse.json({ ok: false, message: "The selected service is no longer available." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: "The selected service is no longer available." },
+        { status: 400 }
+      );
     }
 
-    const total = body.files.length * copies * service.price;
+    const total = files.length * copies * service.price;
     const orderId = `EP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
     const order = await createOrder({
       id: orderId,
-      shopSlug: body.shopSlug,
+      shopSlug,
       serviceId: service.id,
       serviceName: service.name,
       pricePerPage: service.price,
-      paper: body.paper,
+      paper: paper as Body["paper"],
       copies,
       payment: "cash",
       paymentStatus: "pending",
       status: "queued",
       total,
-      files: body.files,
+      files,
     });
 
     return NextResponse.json({ ok: true, order });
