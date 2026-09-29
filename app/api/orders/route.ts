@@ -15,15 +15,17 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<Body>;
 
+    const copies = Number(body.copies);
+
     if (
       !body.shopSlug ||
       !Array.isArray(body.files) ||
       body.files.length === 0 ||
       !body.serviceId ||
       !body.paper ||
-      !Number.isInteger(body.copies) ||
-      body.copies < 1 ||
-      body.copies > 99 ||
+      !Number.isInteger(copies) ||
+      copies < 1 ||
+      copies > 99 ||
       !body.payment
     ) {
       return NextResponse.json({ ok: false, message: "Invalid order." }, { status: 400 });
@@ -36,7 +38,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "The selected service is no longer available." }, { status: 400 });
     }
 
-    const copies = body.copies as number;
     const total = body.files.length * copies * service.price;
     const orderId = `EP-${Date.now().toString(36).toUpperCase()}`;
 
