@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export default function Home() {
   return (
     <main className="landing">
@@ -7,15 +5,13 @@ export default function Home() {
       <section className="landing-card">
         <div className="brand-mark">EP</div>
         <div className="eyebrow">EASY PRINT</div>
-        <h1>Print from your phone. <span>Skip the WhatsApp.</span></h1>
+        <h1>Print from your phone. <span>Scan the shop QR.</span></h1>
         <p className="landing-copy">
-          Scan a shop QR, choose your photos, set the print options, and send the order straight to the shop.
+          Easy Print customer ordering starts from the QR displayed by your print shop.
+          Scan that QR with your phone to open the shop-specific ordering page.
         </p>
-        <Link className="primary-button landing-button" href="/s/demo">
-          Start a print order <span>→</span>
-        </Link>
         <div className="flow-note">
-          <span>01</span> Select · <span>02</span> Set options · <span>03</span> Send order
+          <span>01</span> Scan shop QR · <span>02</span> Select files · <span>03</span> Send order
         </div>
       </section>
     </main>
