@@ -1,4 +1,13 @@
-import { neon } from "@neondatabase/serverless";
+import crypto from "node:crypto";
+import { deleteBlob, readJson, writeJson } from "@/lib/blobJson";
+
+export type ShopService = {
+  id: string;
+  name: string;
+  price: number;
+  unit: string;
+  active: boolean;
+};
 
 export type ShopRecord = {
   id: string;
@@ -7,85 +16,123 @@ export type ShopRecord = {
   ownerName: string;
   ownerPhone: string;
   activationCode: string | null;
-  agentToken: string | null;
+  agentToken: string;
+  services: ShopService[];
   active: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
-async function db() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not configured.");
-  const sql = neon(url);
+const DEMO_SHOP: ShopRecord = {
+  id: "demo",
+  slug: "demo",
+  name: "Demo Print Shop",
+  ownerName: "Easy Print",
+  ownerPhone: "",
+  activationCode: null,
+  agentToken: "demo-agent-token",
+  services: [
+    { id: "color-photo", name: "Colour Photo", price: 10, unit: "per page", active: true },
+    { id: "bw-photo", name: "Black & White", price: 5, unit: "per page", active: true },
+  ],
+  active: true,
+  createdAt: new Date(0).toISOString(),
+  updatedAt: new Date(0).toISOString(),
+};
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS shops (
-      id TEXT PRIMARY KEY,
-      slug TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      owner_name TEXT NOT NULL DEFAULT '',
-      owner_phone TEXT NOT NULL DEFAULT '',
-      activation_code TEXT UNIQUE,
-      agent_token TEXT UNIQUE,
-      active BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+const shopPath = (slug: string) => `shops/${slug}.json`;
+const activationIndexPath = (code: string) => `indexes/activation/${hashSecret(code)}.json`;
+const agentIndexPath = (token: string) => `indexes/agent/${hashSecret(token)}.json`;
 
-  return sql;
+function hashSecret(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-function mapRow(row: Record<string, unknown>): ShopRecord {
-  return {
-    id: String(row.id),
-    slug: String(row.slug),
-    name: String(row.name),
-    ownerName: String(row.owner_name ?? ""),
-    ownerPhone: String(row.owner_phone ?? ""),
-    activationCode: row.activation_code ? String(row.activation_code) : null,
-    agentToken: row.agent_token ? String(row.agent_token) : null,
-    active: Boolean(row.active),
-    createdAt: new Date(String(row.created_at)).toISOString(),
-    updatedAt: new Date(String(row.updated_at)).toISOString(),
-  };
+function normalizeActivationCode(value: string) {
+  return value.trim().toUpperCase();
 }
 
 export async function createShop(input: {
-  id: string;
-  slug: string;
+  id?: string;
+  slug?: string;
   name: string;
   ownerName?: string;
   ownerPhone?: string;
-  activationCode: string;
-  agentToken: string;
+  activationCode?: string;
+  agentToken?: string;
+  services?: ShopService[];
 }) {
-  const sql = await db();
-  const rows = await sql`
-    INSERT INTO shops (id, slug, name, owner_name, owner_phone, activation_code, agent_token)
-    VALUES (
-      ${input.id}, ${input.slug}, ${input.name},
-      ${input.ownerName ?? ""}, ${input.ownerPhone ?? ""},
-      ${input.activationCode}, ${input.agentToken}
-    )
-    RETURNING *
-  `;
-  return mapRow(rows[0]);
+  const now = new Date().toISOString();
+  const id = input.id ?? crypto.randomUUID();
+  const slug = input.slug ?? `ep-${crypto.randomBytes(5).toString("hex")}`;
+  const activationCode = input.activationCode ?? `EP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+  const agentToken = input.agentToken ?? `epa_${crypto.randomBytes(32).toString("hex")}`;
+
+  const shop: ShopRecord = {
+    id,
+    slug,
+    name: input.name.trim(),
+    ownerName: input.ownerName?.trim() ?? "",
+    ownerPhone: input.ownerPhone?.trim() ?? "",
+    activationCode,
+    agentToken,
+    services: input.services ?? [
+      { id: "color-photo", name: "Colour Photo", price: 10, unit: "per page", active: true },
+      { id: "bw-photo", name: "Black & White", price: 5, unit: "per page", active: true },
+    ],
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await writeJson(shopPath(slug), shop);
+  await writeJson(activationIndexPath(activationCode), { slug });
+  await writeJson(agentIndexPath(agentToken), { slug });
+  return shop;
+}
+
+export async function updateShop(slug: string, patch: Partial<ShopRecord>) {
+  const existing = await getShop(slug);
+  if (!existing) throw new Error("Shop not found.");
+
+  const next: ShopRecord = {
+    ...existing,
+    ...patch,
+    slug: existing.slug,
+    id: existing.id,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await writeJson(shopPath(slug), next);
+  return next;
 }
 
 export async function getShop(slug: string) {
-  const sql = await db();
-  const rows = await sql`SELECT * FROM shops WHERE slug = ${slug} LIMIT 1`;
-  return rows.length ? mapRow(rows[0]) : null;
+  if (slug === "demo") {
+    return (await readJson<ShopRecord>(shopPath(slug))) ?? DEMO_SHOP;
+  }
+  return readJson<ShopRecord>(shopPath(slug));
 }
 
 export async function activateShop(activationCode: string) {
-  const sql = await db();
-  const rows = await sql`
-    UPDATE shops
-    SET activation_code = NULL, updated_at = NOW()
-    WHERE activation_code = ${activationCode} AND active = TRUE
-    RETURNING *
-  `;
-  return rows.length ? mapRow(rows[0]) : null;
+  const normalized = normalizeActivationCode(activationCode);
+  const index = await readJson<{ slug: string }>(activationIndexPath(normalized));
+  if (!index) return null;
+
+  const shop = await getShop(index.slug);
+  if (!shop || !shop.active || shop.activationCode !== normalized) return null;
+
+  await deleteBlob(activationIndexPath(normalized));
+  return updateShop(shop.slug, { activationCode: null });
+}
+
+export async function getShopByAgentToken(token: string) {
+  if (!token) return null;
+  if (token === DEMO_SHOP.agentToken) return DEMO_SHOP;
+
+  const index = await readJson<{ slug: string }>(agentIndexPath(token));
+  if (!index) return null;
+
+  const shop = await getShop(index.slug);
+  return shop?.active && shop.agentToken === token ? shop : null;
 }
