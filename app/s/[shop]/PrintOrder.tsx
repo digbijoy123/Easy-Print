@@ -33,6 +33,9 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   const [payment, setPayment] = useState<Payment>("upi");
   const [editing, setEditing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [orderId, setOrderId] = useState("");
+  const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const pricePerPage = color === "color" ? SHOP.colorPrice : SHOP.bwPrice;
   const total = useMemo(
@@ -62,9 +65,36 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
     setCopies((value) => Math.min(99, Math.max(1, value + delta)));
   }
 
-  function submitOrder() {
-    if (!files.length) return;
-    setSubmitted(true);
+  async function submitOrder() {
+    if (!files.length || sending) return;
+    setSending(true);
+    setSubmitError("");
+
+    try {
+      const response = await fetch("/api/sandbox/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopSlug,
+          files: files.map((file) => ({ name: file.name })),
+          color,
+          paper,
+          copies,
+          payment,
+          total,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.message || "Order failed");
+
+      setOrderId(data.order.id);
+      setSubmitted(true);
+    } catch {
+      setSubmitError("The sandbox could not create the order. Please try again.");
+    } finally {
+      setSending(false);
+    }
   }
 
   if (submitted) {
@@ -72,13 +102,16 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
       <main className="order-shell">
         <section className="success-card">
           <div className="success-icon">✓</div>
-          <p className="eyebrow">ORDER READY</p>
-          <h1>Your order has been sent.</h1>
+          <p className="eyebrow">SANDBOX ORDER</p>
+          <h1>Your virtual order is queued.</h1>
           <p>
-            Show the shop your order status if needed. The print shop can now
-            process your files with the selected settings.
+            This is a virtual test environment. No real payment is made and no physical printer is contacted. The next sandbox stage will simulate the local Print Agent and printer.
           </p>
           <div className="order-ticket">
+            <div>
+              <span>Order ID</span>
+              <strong>{orderId}</strong>
+            </div>
             <div>
               <span>Shop</span>
               <strong>{SHOP.name}</strong>
@@ -96,6 +129,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <strong>₹{total}</strong>
             </div>
           </div>
+          <div className="sandbox-status">● Virtual Print Agent · Job queued for simulation</div>
           <button className="secondary-button" onClick={() => setSubmitted(false)}>
             Back to order
           </button>
@@ -253,11 +287,12 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
             </div>
 
             <button className="primary-button submit-button" disabled={!files.length} onClick={submitOrder}>
-              {payment === "upi" ? "Continue to payment" : "Send order"}
+              {sending ? "Creating sandbox order…" : payment === "upi" ? "Continue to mock payment" : "Send sandbox order"}
               <span>→</span>
             </button>
 
             {!files.length && <p className="hint">Add at least one photo to continue.</p>}
+            {submitError && <p className="error-note">{submitError}</p>}
             <p className="privacy-note">Your files are only used for this print order.</p>
           </div>
         </aside>
