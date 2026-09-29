@@ -57,7 +57,7 @@ export async function listServices(shopSlug: string) {
     if (!memoryStore.has(shopSlug)) {
       memoryStore.set(
         shopSlug,
-        DEFAULT_SERVICES.filter((service) => service.shopSlug === shopSlug).map((service) => ({ ...service }))
+        DEFAULT_SERVICES.map((service) => ({ ...service, shopSlug }))
       );
     }
 
@@ -77,13 +77,13 @@ export async function listServices(shopSlug: string) {
     ORDER BY updated_at ASC, name ASC
   `;
 
-  if (!rows.length && shopSlug === "demo") {
+  if (!rows.length) {
     for (const service of DEFAULT_SERVICES) {
       await sql`
         INSERT INTO print_services (id, shop_slug, name, price, unit, active)
         VALUES (
           ${service.id},
-          ${service.shopSlug},
+          ${shopSlug},
           ${service.name},
           ${service.price},
           ${service.unit},
@@ -98,7 +98,7 @@ export async function listServices(shopSlug: string) {
       `;
     }
 
-    return DEFAULT_SERVICES.map((service) => ({ ...service }));
+    return DEFAULT_SERVICES.map((service) => ({ ...service, shopSlug }));
   }
 
   return rows as DbService[];
