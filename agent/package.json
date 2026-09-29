@@ -1,9 +1,7 @@
 {
-  "name": "easyprint-agent",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "start": "node index.js"
-  }
+  "name":"easy-print-agent","private":true,"version":"0.2.0","type":"module",
+  "scripts":{"start":"node index.js","control-panel":"electron desktop/main.js"},
+  "dependencies":{"dotenv":"^16.4.5","electron":"^38.0.0","qrcode":"^1.5.4"},
+  "devDependencies":{"electron-builder":"^26.0.12"},
+  "build":{"appId":"com.easyprint.control","productName":"Easy Print","files":["desktop/**/*","service.js","index.js","package.json"],"win":{"target":"nsis"}}
 }
