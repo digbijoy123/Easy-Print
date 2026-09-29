@@ -15,6 +15,6 @@ export async function POST(
     return NextResponse.json({ ok: false, message: "Order not found." }, { status: 404 });
   }
 
-  const order = await updateOrderStatus(id, "printed", "confirmed", shop.slug);
+  const order = await updateOrderStatus(id, existing.status, "confirmed", shop.slug);
   return NextResponse.json({ ok: true, order });
 }

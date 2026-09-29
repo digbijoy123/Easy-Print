@@ -9,6 +9,7 @@ export function startAgent(config, onEvent = () => {}) {
     throw new Error("Easy Print agent requires server, token and shop.");
   }
 
+  const cleanServer = String(server).replace(/\/+$/, "");
   const headers = { Authorization: `Bearer ${token}` };
   const printedJobs = new Map();
 
@@ -24,8 +25,8 @@ export function startAgent(config, onEvent = () => {}) {
 
   async function confirmCash(orderId) {
     const jobDir = printedJobs.get(orderId);
-    await api(`${server}/api/agent/orders/${orderId}/payment`, { method: "POST" });
-    await api(`${server}/api/agent/orders/${orderId}/complete`, { method: "POST" });
+    await api(`${cleanServer}/api/agent/orders/${orderId}/payment`, { method: "POST" });
+    await api(`${cleanServer}/api/agent/orders/${orderId}/complete`, { method: "POST" });
 
     if (jobDir) {
       await fs.rm(jobDir, { recursive: true, force: true });
@@ -37,7 +38,7 @@ export function startAgent(config, onEvent = () => {}) {
 
   async function processOrder(order) {
     onEvent({ type: "processing", order });
-    await api(`${server}/api/agent/orders/${order.id}/status`, {
+    await api(`${cleanServer}/api/agent/orders/${order.id}/status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "printing" }),
@@ -51,15 +52,13 @@ export function startAgent(config, onEvent = () => {}) {
 
       for (const file of order.files) {
         const response = await fetch(
-          `${server}/api/agent/orders/${order.id}/files/${file.id}`,
+          `${cleanServer}/api/agent/orders/${order.id}/files/${file.id}`,
           { headers }
         );
         if (!response.ok) throw new Error(`Could not download ${file.name}`);
 
-        const destination = path.join(
-          tempDir,
-          file.name.replace(/[<>:"/\\|?*]/g, "_")
-        );
+        const safeFilename = `${file.id}_${file.name.replace(/[<>:"/\\|?*]/g, "_")}`;
+        const destination = path.join(tempDir, safeFilename);
         await fs.writeFile(destination, Buffer.from(await response.arrayBuffer()));
         localFiles.push(destination);
       }
@@ -106,7 +105,7 @@ export function startAgent(config, onEvent = () => {}) {
       onEvent({ type: "printed", order, jobDir });
     } catch (error) {
       if (jobDir) await fs.rm(jobDir, { recursive: true, force: true }).catch(() => {});
-      await api(`${server}/api/agent/orders/${order.id}/status`, {
+      await api(`${cleanServer}/api/agent/orders/${order.id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "failed" }),
@@ -117,10 +116,13 @@ export function startAgent(config, onEvent = () => {}) {
     }
   }
 
+  let isPolling = false;
   async function poll() {
+    if (isPolling) return;
+    isPolling = true;
     try {
       const data = await api(
-        `${server}/api/agent/orders?shop=${encodeURIComponent(shop)}`
+        `${cleanServer}/api/agent/orders?shop=${encodeURIComponent(shop)}`
       );
       onEvent({ type: "connected", shop, orders: data.orders || [] });
       for (const order of data.orders || []) {
@@ -128,6 +130,8 @@ export function startAgent(config, onEvent = () => {}) {
       }
     } catch (error) {
       onEvent({ type: "offline", error });
+    } finally {
+      isPolling = false;
     }
   }
 

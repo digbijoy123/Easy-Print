@@ -75,7 +75,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files ?? []);
     const next = selected
-      .filter((file) => file.type.startsWith("image/"))
+      .filter((file) => file.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif|bmp|gif)$/i.test(file.name))
       .map((file) => ({
         id: crypto.randomUUID(),
         name: file.name,
@@ -87,7 +87,11 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   }
 
   function removeFile(id: string) {
-    setFiles((current) => current.filter((file) => file.id !== id));
+    setFiles((current) => {
+      const match = current.find((file) => file.id === id);
+      if (match?.url.startsWith("blob:")) URL.revokeObjectURL(match.url);
+      return current.filter((file) => file.id !== id);
+    });
   }
 
   function saveEditedPhoto(url: string) {
@@ -232,6 +236,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <div className="preview-grid">
                 {files.map((file) => (
                   <div className="photo-card" key={file.id}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={file.url} alt={file.name} />
                     <div className="photo-card-actions">
                       <button className="photo-edit-button" onClick={() => setEditingFile(file)}>Edit</button>

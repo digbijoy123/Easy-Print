@@ -31,11 +31,11 @@ export async function POST(request: Request) {
       !shopSlug ||
       files.length === 0 ||
       !serviceId ||
-      paper !== "A4" && paper !== "A5" && paper !== "4x6" ||
+      (paper !== "A4" && paper !== "A5" && paper !== "4x6") ||
       !Number.isInteger(copies) ||
       copies < 1 ||
       copies > 99 ||
-      payment !== "cash"
+      (payment !== "cash" && payment !== "upi")
     ) {
       return NextResponse.json({ ok: false, message: "Invalid order." }, { status: 400 });
     }
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       pricePerPage: service.price,
       paper,
       copies,
-      payment: "cash",
+      payment: payment === "upi" ? "upi" : "cash",
       paymentStatus: "pending",
       status: "queued",
       total,

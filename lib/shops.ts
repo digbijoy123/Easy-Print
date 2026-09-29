@@ -75,8 +75,8 @@ export async function createShop(input: {
   const now = new Date().toISOString();
   const id = input.id ?? crypto.randomUUID();
   const slug = input.slug ?? `ep-${crypto.randomBytes(5).toString("hex")}`;
-  const activationCode = input.activationCode ?? `EP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
-  const agentToken = input.agentToken ?? `epa_${crypto.randomBytes(32).toString("hex")}`;
+  const activationCode = normalizeActivationCode(input.activationCode ?? `EP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`);
+  const agentToken = (input.agentToken ?? `epa_${crypto.randomBytes(32).toString("hex")}`).trim();
 
   const shop: ShopRecord = {
     id,

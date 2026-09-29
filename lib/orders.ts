@@ -29,9 +29,13 @@ function orderPath(shopSlug: string, id: string) {
 }
 
 async function readOrder(pathname: string) {
-  const result = await get(pathname, { access: "private" });
-  if (!result || result.statusCode !== 200 || !result.stream) return null;
-  return JSON.parse(await new Response(result.stream).text()) as OrderRecord;
+  try {
+    const result = await get(pathname, { access: "private" });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    return JSON.parse(await new Response(result.stream).text()) as OrderRecord;
+  } catch {
+    return null;
+  }
 }
 
 async function writeOrder(order: OrderRecord) {
@@ -59,7 +63,7 @@ export async function listQueuedOrders(shopSlug: string) {
 
   return orders
     .filter((order): order is OrderRecord =>
-      Boolean(order) && ["queued", "printing", "printed"].includes(order.status)
+      order !== null && ["queued", "printing", "printed"].includes(order.status)
     )
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
@@ -74,7 +78,7 @@ export async function getOrder(id: string, shopSlug?: string) {
 
 export async function updateOrderStatus(
   id: string,
-  status: OrderRecord["status"],
+  status?: OrderRecord["status"],
   paymentStatus?: OrderRecord["paymentStatus"],
   shopSlug?: string
 ) {
@@ -83,7 +87,7 @@ export async function updateOrderStatus(
 
   return writeOrder({
     ...order,
-    status,
+    status: status ?? order.status,
     paymentStatus: paymentStatus ?? order.paymentStatus,
     updatedAt: new Date().toISOString(),
   });

@@ -66,11 +66,14 @@ export default function PhotoEditor({
   const [edit, setEdit] = useState<EditValues>(DEFAULT_EDIT);
   const [saving, setSaving] = useState(false);
 
+  const editRef = useRef<EditValues>(edit);
+  editRef.current = edit;
+
   useEffect(() => {
     const image = new Image();
     image.onload = () => {
       imageRef.current = image;
-      if (canvasRef.current) drawPreview(canvasRef.current, image, edit);
+      if (canvasRef.current) drawPreview(canvasRef.current, image, editRef.current);
     };
     image.src = file.url;
 

@@ -12,11 +12,15 @@ export async function writeJson<T>(pathname: string, value: T) {
 }
 
 export async function readJson<T>(pathname: string): Promise<T | null> {
-  const result = await get(pathname, { access: ACCESS });
-  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  try {
+    const result = await get(pathname, { access: ACCESS });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
 
-  const text = await new Response(result.stream).text();
-  return JSON.parse(text) as T;
+    const text = await new Response(result.stream).text();
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteBlob(pathname: string) {

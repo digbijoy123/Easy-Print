@@ -59,7 +59,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1050, height: 720, minWidth: 850, minHeight: 600,
     webPreferences: {
-      preload: path.join(app.getAppPath(), "desktop/preload.js"),
+      preload: path.join(app.getAppPath(), "desktop/preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
