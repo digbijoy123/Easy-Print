@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const orders = await listQueuedOrders();
+    const shop = new URL(request.url).searchParams.get("shop") || undefined;
+    const orders = await listQueuedOrders(shop);
     return NextResponse.json({ ok: true, orders });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent queue unavailable.";
