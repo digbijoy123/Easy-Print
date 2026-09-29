@@ -1,10 +1,11 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import PhotoEditor from "./PhotoEditor";
 
 type PaperSize = "A4" | "A5" | "4x6";
-type Payment = "upi" | "cash";
+type Payment = "cash";
 
 type PrintFile = {
   id: string;
@@ -37,15 +38,16 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   const [selectedService, setSelectedService] = useState("color-photo");
   const [paper, setPaper] = useState<PaperSize>("A4");
   const [copies, setCopies] = useState(1);
-  const [payment, setPayment] = useState<Payment>("upi");
+  const [payment] = useState<Payment>("cash");
   const [editingFile, setEditingFile] = useState<PrintFile | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(0);
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/sandbox/shop/${shopSlug}/services`, { cache: "no-store" })
+    fetch(`/api/shop/${shopSlug}/services`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (data.ok && Array.isArray(data.services) && data.services.length) {
@@ -93,36 +95,67 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   }
 
   async function submitOrder() {
-    if (!files.length || sending) return;
+    if (!files.length || !service || sending) return;
+
     setSending(true);
     setSubmitError("");
+    setUploading(0);
 
     try {
-      const response = await fetch("/api/sandbox/orders", {
+      const sessionId = crypto.randomUUID();
+      const uploaded = [];
+
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const response = await fetch(file.url);
+        const blob = await response.blob();
+        const uploadResult = await upload(
+          `incoming/${shopSlug}/${sessionId}/${file.id}-${file.name}`,
+          new File([blob], file.name, { type: blob.type || "image/jpeg" }),
+          {
+            access: "private",
+            handleUploadUrl: "/api/upload",
+            clientPayload: JSON.stringify({ shopSlug, sessionId }),
+            multipart: true,
+            onUploadProgress(event) {
+              setUploading(Math.round(((index + event.percentage / 100) / files.length) * 100));
+            },
+          }
+        );
+
+        uploaded.push({
+          id: file.id,
+          name: file.name,
+          pathname: uploadResult.pathname,
+          contentType: blob.type || "image/jpeg",
+        });
+      }
+
+      const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           shopSlug,
-          files: files.map((file) => ({ name: file.name })),
-          service: service?.name,
-          serviceId: service?.id,
-          pricePerPage,
+          files: uploaded,
+          serviceId: service.id,
           paper,
           copies,
           payment,
-          total,
         }),
       });
 
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.message || "Order failed");
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "Order failed.");
+      }
 
       setOrderId(data.order.id);
       setSubmitted(true);
-    } catch {
-      setSubmitError("The sandbox could not create the order. Please try again.");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not place the order.");
     } finally {
       setSending(false);
+      setUploading(0);
     }
   }
 
@@ -131,18 +164,19 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
       <main className="order-shell">
         <section className="success-card">
           <div className="success-icon">✓</div>
-          <p className="eyebrow">SANDBOX ORDER</p>
-          <h1>Your virtual order is queued.</h1>
-          <p>This is a virtual test environment. No real payment is made and no physical printer is contacted.</p>
+          <p className="eyebrow">ORDER CONFIRMED</p>
+          <h1>Your order is with the shop.</h1>
+          <p>Your files are securely held only while this order is being processed. They will be deleted after printing and payment are completed.</p>
           <div className="order-ticket">
             <div><span>Order ID</span><strong>{orderId}</strong></div>
             <div><span>Shop</span><strong>Demo Print Shop</strong></div>
             <div><span>Service</span><strong>{service?.name}</strong></div>
             <div><span>Files</span><strong>{files.length} photo{files.length !== 1 ? "s" : ""}</strong></div>
-            <div><span>Print</span><strong>{copies} copy{copies !== 1 ? "ies" : "y"} · {PAPER_LABELS[paper]}</strong></div>
+            <div><span>Print</span><strong>{copies} cop{copies !== 1 ? "ies" : "y"} · {PAPER_LABELS[paper]}</strong></div>
             <div><span>Total</span><strong>₹{total}</strong></div>
+            <div><span>Payment</span><strong>Cash at shop</strong></div>
           </div>
-          <div className="sandbox-status">● Virtual Print Agent · Job queued for simulation</div>
+          <div className="sandbox-status">● Shop print queue · Waiting for processing</div>
           <button className="secondary-button" onClick={() => setSubmitted(false)}>Back to order</button>
         </section>
       </main>
@@ -155,9 +189,9 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
         <div className="brand-mark small">EP</div>
         <div>
           <strong>Demo Print Shop</strong>
-          <span>Easy Print Demo</span>
+          <span>Easy Print</span>
         </div>
-        <div className="secure-pill">● Ready</div>
+        <div className="secure-pill">● Connected</div>
       </header>
 
       <div className="order-layout">
@@ -269,16 +303,15 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
 
             <span className="setting-label">Payment</span>
             <div className="payment-options">
-              <button className={payment === "upi" ? "payment active" : "payment"} onClick={() => setPayment("upi")}>
+              <button className="payment active">
                 <span className="payment-icon">₹</span>
-                <span><strong>UPI</strong><small>Pay with any UPI app</small></span>
-                <span className="radio" />
-              </button>
-              <button className={payment === "cash" ? "payment active" : "payment"} onClick={() => setPayment("cash")}>
-                <span className="payment-icon">▣</span>
                 <span><strong>Cash at shop</strong><small>Pay when you collect</small></span>
                 <span className="radio" />
               </button>
+              <div className="payment" style={{ opacity: 0.55, cursor: "not-allowed" }}>
+                <span className="payment-icon">↗</span>
+                <span><strong>UPI</strong><small>Online payment coming next</small></span>
+              </div>
             </div>
 
             <div className="total-row">
@@ -286,14 +319,14 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <strong>₹{total}</strong>
             </div>
 
-            <button className="primary-button submit-button" disabled={!files.length} onClick={submitOrder}>
-              {sending ? "Creating sandbox order…" : payment === "upi" ? "Continue to mock payment" : "Send sandbox order"}
+            <button className="primary-button submit-button" disabled={!files.length || sending} onClick={submitOrder}>
+              {sending ? `Uploading ${uploading}%…` : "Place order"}
               <span>→</span>
             </button>
 
             {!files.length && <p className="hint">Add at least one photo to continue.</p>}
             {submitError && <p className="error-note">{submitError}</p>}
-            <p className="privacy-note">Your files are only used for this print order.</p>
+            <p className="privacy-note">Files are private and automatically removed after the completed print.</p>
           </div>
         </aside>
       </div>
