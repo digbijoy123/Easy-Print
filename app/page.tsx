@@ -15,6 +15,13 @@ export default function Home() {
         <Link className="primary-button landing-button" href="/s/demo">
           Try the customer flow <span>→</span>
         </Link>
+        <div className="sandbox-owner">
+          <div>
+            <strong>Sandbox shop owner</strong>
+            <span>Change demo printing services and prices.</span>
+          </div>
+          <Link href="/admin/demo">Open shop settings →</Link>
+        </div>
         <div className="flow-note">
           <span>01</span> Select · <span>02</span> Set options · <span>03</span> Send order
         </div>
