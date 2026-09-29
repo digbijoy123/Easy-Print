@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import PrintOrder from "./PrintOrder";
 import { getShop } from "@/lib/shops";
 
+export const dynamic = "force-dynamic";
+
 export default async function ShopPage({
   params,
 }: {
