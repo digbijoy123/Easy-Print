@@ -1,8 +1,8 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import PhotoEditor from "./PhotoEditor";
 
-type PrintColor = "color" | "bw";
 type PaperSize = "A4" | "A5" | "4x6";
 type Payment = "upi" | "cash";
 
@@ -12,11 +12,12 @@ type PrintFile = {
   url: string;
 };
 
-const SHOP = {
-  name: "Demo Print Shop",
-  location: "Easy Print Demo",
-  colorPrice: 10,
-  bwPrice: 5,
+type PrintService = {
+  id: string;
+  name: string;
+  price: number;
+  unit: string;
+  active: boolean;
 };
 
 const PAPER_LABELS: Record<PaperSize, string> = {
@@ -25,19 +26,38 @@ const PAPER_LABELS: Record<PaperSize, string> = {
   "4x6": '4 × 6"',
 };
 
+const FALLBACK_SERVICES: PrintService[] = [
+  { id: "color-photo", name: "Colour Photo", price: 10, unit: "per page", active: true },
+  { id: "bw-photo", name: "Black & White", price: 5, unit: "per page", active: true },
+];
+
 export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   const [files, setFiles] = useState<PrintFile[]>([]);
-  const [color, setColor] = useState<PrintColor>("color");
+  const [services, setServices] = useState<PrintService[]>(FALLBACK_SERVICES);
+  const [selectedService, setSelectedService] = useState("color-photo");
   const [paper, setPaper] = useState<PaperSize>("A4");
   const [copies, setCopies] = useState(1);
   const [payment, setPayment] = useState<Payment>("upi");
-  const [editing, setEditing] = useState(false);
+  const [editingFile, setEditingFile] = useState<PrintFile | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [sending, setSending] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const pricePerPage = color === "color" ? SHOP.colorPrice : SHOP.bwPrice;
+  useEffect(() => {
+    fetch(`/api/sandbox/shop/${shopSlug}/services`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.ok && Array.isArray(data.services) && data.services.length) {
+          setServices(data.services);
+          setSelectedService(data.services[0].id);
+        }
+      })
+      .catch(() => {});
+  }, [shopSlug]);
+
+  const service = services.find((item) => item.id === selectedService) ?? services[0];
+  const pricePerPage = service?.price ?? 0;
   const total = useMemo(
     () => files.length * copies * pricePerPage,
     [files.length, copies, pricePerPage]
@@ -61,6 +81,13 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
     setFiles((current) => current.filter((file) => file.id !== id));
   }
 
+  function saveEditedPhoto(url: string) {
+    if (!editingFile) return;
+    setFiles((current) =>
+      current.map((file) => (file.id === editingFile.id ? { ...file, url } : file))
+    );
+  }
+
   function changeCopies(delta: number) {
     setCopies((value) => Math.min(99, Math.max(1, value + delta)));
   }
@@ -77,7 +104,9 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
         body: JSON.stringify({
           shopSlug,
           files: files.map((file) => ({ name: file.name })),
-          color,
+          service: service?.name,
+          serviceId: service?.id,
+          pricePerPage,
           paper,
           copies,
           payment,
@@ -104,35 +133,17 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
           <div className="success-icon">✓</div>
           <p className="eyebrow">SANDBOX ORDER</p>
           <h1>Your virtual order is queued.</h1>
-          <p>
-            This is a virtual test environment. No real payment is made and no physical printer is contacted. The next sandbox stage will simulate the local Print Agent and printer.
-          </p>
+          <p>This is a virtual test environment. No real payment is made and no physical printer is contacted.</p>
           <div className="order-ticket">
-            <div>
-              <span>Order ID</span>
-              <strong>{orderId}</strong>
-            </div>
-            <div>
-              <span>Shop</span>
-              <strong>{SHOP.name}</strong>
-            </div>
-            <div>
-              <span>Files</span>
-              <strong>{files.length} photo{files.length !== 1 ? "s" : ""}</strong>
-            </div>
-            <div>
-              <span>Print</span>
-              <strong>{copies} copy · {color === "color" ? "Colour" : "B&W"} · {PAPER_LABELS[paper]}</strong>
-            </div>
-            <div>
-              <span>Total</span>
-              <strong>₹{total}</strong>
-            </div>
+            <div><span>Order ID</span><strong>{orderId}</strong></div>
+            <div><span>Shop</span><strong>Demo Print Shop</strong></div>
+            <div><span>Service</span><strong>{service?.name}</strong></div>
+            <div><span>Files</span><strong>{files.length} photo{files.length !== 1 ? "s" : ""}</strong></div>
+            <div><span>Print</span><strong>{copies} copy{copies !== 1 ? "ies" : "y"} · {PAPER_LABELS[paper]}</strong></div>
+            <div><span>Total</span><strong>₹{total}</strong></div>
           </div>
           <div className="sandbox-status">● Virtual Print Agent · Job queued for simulation</div>
-          <button className="secondary-button" onClick={() => setSubmitted(false)}>
-            Back to order
-          </button>
+          <button className="secondary-button" onClick={() => setSubmitted(false)}>Back to order</button>
         </section>
       </main>
     );
@@ -143,8 +154,8 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
       <header className="shop-header">
         <div className="brand-mark small">EP</div>
         <div>
-          <strong>{SHOP.name}</strong>
-          <span>{SHOP.location}</span>
+          <strong>Demo Print Shop</strong>
+          <span>Easy Print Demo</span>
         </div>
         <div className="secure-pill">● Ready</div>
       </header>
@@ -169,7 +180,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <div className="section-heading">
                 <div>
                   <strong>{files.length} photo{files.length !== 1 ? "s" : ""} selected</strong>
-                  <span>Tap a photo to remove it</span>
+                  <span>Use Edit to adjust each photo before printing.</span>
                 </div>
                 <label className="add-more">
                   + Add more
@@ -179,50 +190,41 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
 
               <div className="preview-grid">
                 {files.map((file) => (
-                  <button className="preview-card" key={file.id} onClick={() => removeFile(file.id)} title={`Remove ${file.name}`}>
-                    <img src={file.url} alt="" />
-                    <span className="remove-dot">×</span>
-                  </button>
+                  <div className="photo-card" key={file.id}>
+                    <img src={file.url} alt={file.name} />
+                    <div className="photo-card-actions">
+                      <button className="photo-edit-button" onClick={() => setEditingFile(file)}>Edit</button>
+                      <button className="photo-remove-button" onClick={() => removeFile(file.id)} aria-label={`Remove ${file.name}`}>×</button>
+                    </div>
+                  </div>
                 ))}
               </div>
-
-              <button className="edit-link" onClick={() => setEditing((value) => !value)}>
-                ✦ {editing ? "Hide editing tools" : "Optional: basic editing"}
-              </button>
-
-              {editing && (
-                <div className="editing-panel">
-                  <strong>Basic editing</strong>
-                  <span>Crop, rotate and adjustments will be connected here next.</span>
-                  <div className="tool-row">
-                    <button disabled>Crop</button>
-                    <button disabled>Rotate</button>
-                    <button disabled>Adjust</button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           <div className="settings-card">
             <div className="settings-title">
               <div>
-                <p className="eyebrow">PRINT SETTINGS</p>
-                <h2>Choose how it should print</h2>
+                <p className="eyebrow">PRINT SERVICE</p>
+                <h2>Choose a service</h2>
               </div>
               <span className="live-price">₹{pricePerPage} / page</span>
             </div>
 
-            <div className="setting-block">
-              <span className="setting-label">Colour</span>
-              <div className="segmented">
-                <button className={color === "color" ? "active" : ""} onClick={() => setColor("color")}>
-                  <span className="color-dots">●●●</span> Colour <small>₹{SHOP.colorPrice}</small>
+            <div className="service-choice-grid">
+              {services.map((item) => (
+                <button
+                  key={item.id}
+                  className={selectedService === item.id ? "service-choice active" : "service-choice"}
+                  onClick={() => setSelectedService(item.id)}
+                >
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>{item.unit}</small>
+                  </span>
+                  <b>₹{item.price}</b>
                 </button>
-                <button className={color === "bw" ? "active" : ""} onClick={() => setColor("bw")}>
-                  <span className="bw-dot">●</span> Black &amp; White <small>₹{SHOP.bwPrice}</small>
-                </button>
-              </div>
+              ))}
             </div>
 
             <div className="setting-block">
@@ -261,9 +263,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <span>{files.length || 0} photo{files.length !== 1 ? "s" : ""}</span>
               <strong>₹{total}</strong>
             </div>
-            <div className="summary-detail">
-              {copies} cop{copies !== 1 ? "ies" : "y"} · {color === "color" ? "Colour" : "B&W"} · {PAPER_LABELS[paper]}
-            </div>
+            <div className="summary-detail">{service?.name} · {copies} cop{copies !== 1 ? "ies" : "y"} · {PAPER_LABELS[paper]}</div>
 
             <div className="summary-divider" />
 
@@ -302,6 +302,14 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
         <span>Shop: {shopSlug}</span>
         <span>Easy Print · Simple phone printing</span>
       </footer>
+
+      {editingFile && (
+        <PhotoEditor
+          file={editingFile}
+          onSave={saveEditedPhoto}
+          onClose={() => setEditingFile(null)}
+        />
+      )}
     </main>
   );
 }
