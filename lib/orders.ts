@@ -75,9 +75,10 @@ export async function getOrder(id: string, shopSlug?: string) {
 export async function updateOrderStatus(
   id: string,
   status: OrderRecord["status"],
-  paymentStatus?: OrderRecord["paymentStatus"]
+  paymentStatus?: OrderRecord["paymentStatus"],
+  shopSlug?: string
 ) {
-  const order = await getOrder(id);
+  const order = await getOrder(id, shopSlug);
   if (!order) return null;
 
   return writeOrder({
