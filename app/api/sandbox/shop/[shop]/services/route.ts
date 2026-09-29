@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listServices, replaceServices, type DbService } from "../../../../../lib/shopServices";
+import { listServices, replaceServices, type DbService } from "@/lib/shopServices";
 
 export async function GET(
   _request: Request,
