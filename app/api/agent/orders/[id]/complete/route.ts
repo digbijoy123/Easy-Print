@@ -29,9 +29,9 @@ export async function POST(
     );
   }
 
-  if (order.status !== "printing") {
+  if (order.status !== "printed") {
     return NextResponse.json(
-      { ok: false, message: "Order must be in printing state before completion." },
+      { ok: false, message: "Order must be printed before files are deleted." },
       { status: 409 }
     );
   }
