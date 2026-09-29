@@ -26,8 +26,12 @@ export async function GET(
   try {
     const result = await get(file.pathname, {
       access: "private",
-      useCache: false,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
     });
+
+    if (!result || result.statusCode !== 200 || !result.stream) {
+      return NextResponse.json({ ok: false, message: "Stored file is unavailable." }, { status: 404 });
+    }
 
     return new Response(result.stream, {
       headers: {
