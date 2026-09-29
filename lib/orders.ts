@@ -74,12 +74,12 @@ export async function listQueuedOrders(shopSlug?: string) {
   const rows = shopSlug
     ? await sql`
         SELECT * FROM print_orders
-        WHERE shop_slug = ${shopSlug} AND status IN ('queued', 'printing')
+        WHERE shop_slug = ${shopSlug} AND status IN ('queued', 'printing', 'printed')
         ORDER BY created_at ASC
       `
     : await sql`
         SELECT * FROM print_orders
-        WHERE status IN ('queued', 'printing')
+        WHERE status IN ('queued', 'printing', 'printed')
         ORDER BY created_at ASC
       `;
 
