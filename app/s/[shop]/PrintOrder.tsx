@@ -194,7 +194,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
       <header className="shop-header">
         <div className="brand-mark small">EP</div>
         <div>
-          <strong>Demo Print Shop</strong>
+          <strong>{shopName}</strong>
           <span>Easy Print</span>
         </div>
         <div className="secure-pill">● Connected</div>
