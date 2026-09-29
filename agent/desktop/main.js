@@ -14,6 +14,7 @@ function loadConfig() {
   try { return JSON.parse(fs.readFileSync(userConfig, "utf8")); } catch { return null; }
 }
 function saveConfig(next) {
+  next.output = next.output && next.output !== "./virtual-printer-output" ? next.output : path.join(app.getPath("userData"), "virtual-printer-output");
   fs.mkdirSync(path.dirname(userConfig), { recursive: true });
   fs.writeFileSync(userConfig, JSON.stringify(next, null, 2), "utf8");
   config = next;
@@ -38,6 +39,7 @@ ipcMain.handle("qr:generate", async (_event, url) => QRCode.toDataURL(url, { mar
 ipcMain.handle("open:url", (_event, url) => shell.openExternal(url));
 
 app.whenReady().then(() => {
+  app.setLoginItemSettings({ openAtLogin: true });
   config = loadConfig();
   tray = new Tray(nativeImage.createEmpty());
   tray.setToolTip("Easy Print");
