@@ -16,14 +16,17 @@ export async function POST(
 
   const { id } = await params;
   const body = await request.json();
-  const allowedStatuses = ["printing", "printed", "failed"] as const;
-  const status = body.status as (typeof allowedStatuses)[number];
+  const status = String(body.status || "");
 
-  if (!allowedStatuses.includes(status)) {
+  if (status !== "printing" && status !== "printed" && status !== "failed") {
     return NextResponse.json({ ok: false, message: "Invalid status." }, { status: 400 });
   }
 
-  const order = await updateOrderStatus(id, status);
+  const order = await updateOrderStatus(
+    id,
+    status as "printing" | "printed" | "failed"
+  );
+
   if (!order) {
     return NextResponse.json({ ok: false, message: "Order not found." }, { status: 404 });
   }
