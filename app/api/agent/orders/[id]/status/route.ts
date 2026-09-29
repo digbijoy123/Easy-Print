@@ -16,7 +16,7 @@ export async function POST(
 
   const { id } = await params;
   const body = await request.json();
-  const allowedStatuses = ["printing", "failed"] as const;
+  const allowedStatuses = ["printing", "printed", "failed"] as const;
   const status = body.status as (typeof allowedStatuses)[number];
 
   if (!allowedStatuses.includes(status)) {
