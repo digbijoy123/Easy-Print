@@ -10,6 +10,7 @@ export function startAgent(config, onEvent = () => {}) {
   }
 
   const headers = { Authorization: `Bearer ${token}` };
+  const printedJobs = new Map();
 
   async function api(url, options = {}) {
     const response = await fetch(url, {
@@ -21,6 +22,19 @@ export function startAgent(config, onEvent = () => {}) {
     return data;
   }
 
+  async function confirmCash(orderId) {
+    const jobDir = printedJobs.get(orderId);
+    await api(`${server}/api/agent/orders/${orderId}/payment`, { method: "POST" });
+    await api(`${server}/api/agent/orders/${orderId}/complete`, { method: "POST" });
+
+    if (jobDir) {
+      await fs.rm(jobDir, { recursive: true, force: true });
+      printedJobs.delete(orderId);
+    }
+
+    onEvent({ type: "completed", orderId });
+  }
+
   async function processOrder(order) {
     onEvent({ type: "processing", order });
     await api(`${server}/api/agent/orders/${order.id}/status`, {
@@ -30,6 +44,7 @@ export function startAgent(config, onEvent = () => {}) {
     });
 
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "easyprint-"));
+    let jobDir = null;
 
     try {
       const localFiles = [];
@@ -50,7 +65,7 @@ export function startAgent(config, onEvent = () => {}) {
       }
 
       await fs.mkdir(output, { recursive: true });
-      const jobDir = path.join(output, order.id);
+      jobDir = path.join(output, order.id);
       await fs.mkdir(jobDir, { recursive: true });
 
       for (const file of localFiles) {
@@ -74,19 +89,23 @@ export function startAgent(config, onEvent = () => {}) {
         )
       );
 
+      // The virtual-printer folder represents the printer's output for now.
+      // Once the physical printer integration is added, this step will call it.
       await api(`${server}/api/agent/orders/${order.id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "printed" }),
       });
 
+      printedJobs.set(order.id, jobDir);
+
       if (order.payment === "cash" && autoConfirmCash) {
-        await api(`${server}/api/agent/orders/${order.id}/payment`, { method: "POST" });
-        await api(`${server}/api/agent/orders/${order.id}/complete`, { method: "POST" });
+        await confirmCash(order.id);
       }
 
       onEvent({ type: "printed", order, jobDir });
     } catch (error) {
+      if (jobDir) await fs.rm(jobDir, { recursive: true, force: true }).catch(() => {});
       await api(`${server}/api/agent/orders/${order.id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -115,5 +134,7 @@ export function startAgent(config, onEvent = () => {}) {
   const timer = setInterval(poll, 5000);
   poll();
 
-  return () => clearInterval(timer);
+  const stop = () => clearInterval(timer);
+  stop.confirmCash = confirmCash;
+  return stop;
 }
