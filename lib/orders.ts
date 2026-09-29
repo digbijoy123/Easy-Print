@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { del, get, list, put } from "@vercel/blob";
 
 export type OrderFile = {
   id: string;
@@ -24,72 +24,52 @@ export type OrderRecord = {
   updatedAt: string;
 };
 
-async function db() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not configured.");
-  const sql = neon(url);
+function orderPath(shopSlug: string, id: string) {
+  return `orders/${shopSlug}/${id}.json`;
+}
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS print_orders (
-      id TEXT PRIMARY KEY,
-      shop_slug TEXT NOT NULL,
-      service_id TEXT NOT NULL,
-      service_name TEXT NOT NULL,
-      price_per_page NUMERIC(10,2) NOT NULL,
-      paper TEXT NOT NULL,
-      copies INTEGER NOT NULL,
-      payment TEXT NOT NULL,
-      payment_status TEXT NOT NULL DEFAULT 'pending',
-      status TEXT NOT NULL DEFAULT 'queued',
-      total NUMERIC(10,2) NOT NULL,
-      files JSONB NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+async function readOrder(pathname: string) {
+  const result = await get(pathname, { access: "private" });
+  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  return JSON.parse(await new Response(result.stream).text()) as OrderRecord;
+}
 
-  return sql;
+async function writeOrder(order: OrderRecord) {
+  await put(orderPath(order.shopSlug, order.id), JSON.stringify(order), {
+    access: "private",
+    allowOverwrite: true,
+    contentType: "application/json",
+    cacheControlMaxAge: 60,
+  });
+  return order;
 }
 
 export async function createOrder(input: Omit<OrderRecord, "createdAt" | "updatedAt">) {
-  const sql = await db();
-  const rows = await sql`
-    INSERT INTO print_orders (
-      id, shop_slug, service_id, service_name, price_per_page,
-      paper, copies, payment, payment_status, status, total, files
-    )
-    VALUES (
-      ${input.id}, ${input.shopSlug}, ${input.serviceId}, ${input.serviceName},
-      ${input.pricePerPage}, ${input.paper}, ${input.copies}, ${input.payment},
-      ${input.paymentStatus}, ${input.status}, ${input.total}, ${JSON.stringify(input.files)}::jsonb
-    )
-    RETURNING *
-  `;
-
-  return mapRow(rows[0]);
+  const now = new Date().toISOString();
+  return writeOrder({ ...input, createdAt: now, updatedAt: now });
 }
 
-export async function listQueuedOrders(shopSlug?: string) {
-  const sql = await db();
-  const rows = shopSlug
-    ? await sql`
-        SELECT * FROM print_orders
-        WHERE shop_slug = ${shopSlug} AND status IN ('queued', 'printing', 'printed')
-        ORDER BY created_at ASC
-      `
-    : await sql`
-        SELECT * FROM print_orders
-        WHERE status IN ('queued', 'printing', 'printed')
-        ORDER BY created_at ASC
-      `;
+export async function listQueuedOrders(shopSlug: string) {
+  const result = await list({ prefix: `orders/${shopSlug}/`, limit: 1000 });
+  const orders = await Promise.all(
+    result.blobs
+      .filter((blob) => blob.pathname.endsWith(".json"))
+      .map((blob) => readOrder(blob.pathname))
+  );
 
-  return rows.map(mapRow);
+  return orders
+    .filter((order): order is OrderRecord =>
+      Boolean(order) && ["queued", "printing", "printed"].includes(order.status)
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-export async function getOrder(id: string) {
-  const sql = await db();
-  const rows = await sql`SELECT * FROM print_orders WHERE id = ${id} LIMIT 1`;
-  return rows.length ? mapRow(rows[0]) : null;
+export async function getOrder(id: string, shopSlug?: string) {
+  if (shopSlug) return readOrder(orderPath(shopSlug, id));
+
+  const result = await list({ prefix: "orders/", limit: 1000 });
+  const match = result.blobs.find((blob) => blob.pathname.endsWith(`/${id}.json`));
+  return match ? readOrder(match.pathname) : null;
 }
 
 export async function updateOrderStatus(
@@ -97,39 +77,17 @@ export async function updateOrderStatus(
   status: OrderRecord["status"],
   paymentStatus?: OrderRecord["paymentStatus"]
 ) {
-  const sql = await db();
-  const rows = paymentStatus
-    ? await sql`
-        UPDATE print_orders
-        SET status = ${status}, payment_status = ${paymentStatus}, updated_at = NOW()
-        WHERE id = ${id}
-        RETURNING *
-      `
-    : await sql`
-        UPDATE print_orders
-        SET status = ${status}, updated_at = NOW()
-        WHERE id = ${id}
-        RETURNING *
-      `;
+  const order = await getOrder(id);
+  if (!order) return null;
 
-  return rows.length ? mapRow(rows[0]) : null;
+  return writeOrder({
+    ...order,
+    status,
+    paymentStatus: paymentStatus ?? order.paymentStatus,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
-function mapRow(row: Record<string, unknown>): OrderRecord {
-  return {
-    id: String(row.id),
-    shopSlug: String(row.shop_slug),
-    serviceId: String(row.service_id),
-    serviceName: String(row.service_name),
-    pricePerPage: Number(row.price_per_page),
-    paper: row.paper as OrderRecord["paper"],
-    copies: Number(row.copies),
-    payment: row.payment as OrderRecord["payment"],
-    paymentStatus: row.payment_status as OrderRecord["paymentStatus"],
-    status: row.status as OrderRecord["status"],
-    total: Number(row.total),
-    files: (row.files ?? []) as OrderFile[],
-    createdAt: new Date(String(row.created_at)).toISOString(),
-    updatedAt: new Date(String(row.updated_at)).toISOString(),
-  };
+export async function deleteOrder(id: string, shopSlug: string) {
+  await del(orderPath(shopSlug, id));
 }
