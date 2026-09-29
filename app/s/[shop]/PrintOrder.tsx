@@ -45,8 +45,14 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(0);
   const [submitError, setSubmitError] = useState("");
+  const [shopName, setShopName] = useState(shopSlug);
 
   useEffect(() => {
+    fetch(`/api/shop/${shopSlug}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => { if (data.ok && data.shop?.name) setShopName(data.shop.name); })
+      .catch(() => {});
+
     fetch(`/api/shop/${shopSlug}/services`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
@@ -169,7 +175,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
           <p>Your files are securely held only while this order is being processed. They will be deleted after printing and payment are completed.</p>
           <div className="order-ticket">
             <div><span>Order ID</span><strong>{orderId}</strong></div>
-            <div><span>Shop</span><strong>Demo Print Shop</strong></div>
+            <div><span>Shop</span><strong>{shopName}</strong></div>
             <div><span>Service</span><strong>{service?.name}</strong></div>
             <div><span>Files</span><strong>{files.length} photo{files.length !== 1 ? "s" : ""}</strong></div>
             <div><span>Print</span><strong>{copies} cop{copies !== 1 ? "ies" : "y"} · {PAPER_LABELS[paper]}</strong></div>
