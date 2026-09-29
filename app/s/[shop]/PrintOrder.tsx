@@ -27,14 +27,11 @@ const PAPER_LABELS: Record<PaperSize, string> = {
   "4x6": '4 × 6"',
 };
 
-const FALLBACK_SERVICES: PrintService[] = [
-  { id: "color-photo", name: "Colour Photo", price: 10, unit: "per page", active: true },
-  { id: "bw-photo", name: "Black & White", price: 5, unit: "per page", active: true },
-];
-
 export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
   const [files, setFiles] = useState<PrintFile[]>([]);
-  const [services, setServices] = useState<PrintService[]>(FALLBACK_SERVICES);
+  const [services, setServices] = useState<PrintService[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState("");
   const [selectedService, setSelectedService] = useState("color-photo");
   const [paper, setPaper] = useState<PaperSize>("A4");
   const [copies, setCopies] = useState(1);
@@ -54,17 +51,21 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
       .catch(() => {});
 
     fetch(`/api/shop/${shopSlug}/services`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.ok && Array.isArray(data.services) && data.services.length) {
-          setServices(data.services);
-          setSelectedService(data.services[0].id);
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data.ok || !Array.isArray(data.services) || !data.services.length) {
+          throw new Error(data.message || "This shop has no active print services.");
         }
+        setServices(data.services);
+        setSelectedService(data.services[0].id);
       })
-      .catch(() => {});
+      .catch((error) => {
+        setServicesError(error instanceof Error ? error.message : "Services unavailable.");
+      })
+      .finally(() => setServicesLoading(false));
   }, [shopSlug]);
 
-  const service = services.find((item) => item.id === selectedService) ?? services[0];
+  const service = services.find((item) => item.id === selectedService);
   const pricePerPage = service?.price ?? 0;
   const total = useMemo(
     () => files.length * copies * pricePerPage,
@@ -251,8 +252,11 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <span className="live-price">₹{pricePerPage} / page</span>
             </div>
 
-            <div className="service-choice-grid">
-              {services.map((item) => (
+            {servicesLoading && <p className="hint">Loading this shop’s print services…</p>}
+            {servicesError && <p className="error-note">{servicesError}</p>}
+            {!servicesLoading && !servicesError && (
+              <div className="service-choice-grid">
+                {services.map((item) => (
                 <button
                   key={item.id}
                   className={selectedService === item.id ? "service-choice active" : "service-choice"}
@@ -264,8 +268,9 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
                   </span>
                   <b>₹{item.price}</b>
                 </button>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <div className="setting-block">
               <span className="setting-label">Paper size</span>
@@ -325,7 +330,7 @@ export default function PrintOrder({ shopSlug }: { shopSlug: string }) {
               <strong>₹{total}</strong>
             </div>
 
-            <button className="primary-button submit-button" disabled={!files.length || sending} onClick={submitOrder}>
+            <button className="primary-button submit-button" disabled={!files.length || !service || servicesLoading || Boolean(servicesError) || sending} onClick={submitOrder}>
               {sending ? `Uploading ${uploading}%…` : "Place order"}
               <span>→</span>
             </button>
