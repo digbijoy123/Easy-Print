@@ -17,7 +17,7 @@ export type OrderRecord = {
   copies: number;
   payment: "upi" | "cash";
   paymentStatus: "pending" | "confirmed";
-  status: "queued" | "printing" | "completed" | "failed";
+  status: "queued" | "printing" | "printed" | "completed" | "failed";
   total: number;
   files: OrderFile[];
   createdAt: string;
