@@ -13,15 +13,20 @@ export async function POST(
   const body = await request.json();
   const status = String(body.status || "");
 
-  if (status !== "printing" && status !== "printed" && status !== "failed") {
+  if (!["printing", "printed", "completed", "failed"].includes(status)) {
     return NextResponse.json({ ok: false, message: "Invalid status." }, { status: 400 });
   }
 
   const existing = await getOrder(id, shop.slug);
-  if (!existing) {
-    return NextResponse.json({ ok: false, message: "Order not found." }, { status: 404 });
-  }
+  if (!existing) return NextResponse.json({ ok: false, message: "Order not found." }, { status: 404 });
 
-  const order = await updateOrderStatus(id, status as "printing" | "printed" | "failed", undefined, shop.slug);
+  const paymentStatus = status === "completed" ? "confirmed" : undefined;
+  const order = await updateOrderStatus(
+    id,
+    status as "printing" | "printed" | "completed" | "failed",
+    paymentStatus,
+    shop.slug
+  );
+
   return NextResponse.json({ ok: true, order });
 }
