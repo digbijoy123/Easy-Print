@@ -35,6 +35,33 @@ function normalizeActivationCode(value: string) {
   return value.trim().toUpperCase();
 }
 
+async function ensureDemoShop() {
+  const existing = await readJson<ShopRecord>(shopPath("demo"));
+  if (existing) return existing;
+
+  const now = new Date().toISOString();
+  const shop: ShopRecord = {
+    id: "sandbox-demo-shop",
+    slug: "demo",
+    name: "Demo Print Shop",
+    ownerName: "Sandbox Owner",
+    ownerPhone: "0000000000",
+    activationCode: null,
+    agentToken: "epa_demo_sandbox",
+    services: [
+      { id: "color-photo", name: "Colour Photo", price: 10, unit: "per page", active: true },
+      { id: "bw-photo", name: "Black & White", price: 5, unit: "per page", active: true },
+    ],
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await writeJson(shopPath("demo"), shop);
+  await writeJson(agentIndexPath(shop.agentToken), { slug: "demo" });
+  return shop;
+}
+
 export async function createShop(input: {
   id?: string;
   slug?: string;
@@ -91,7 +118,8 @@ export async function updateShop(slug: string, patch: Partial<ShopRecord>) {
 }
 
 export async function getShop(slug: string) {
-  if (!slug || slug === "demo") return null;
+  if (slug === "demo") return ensureDemoShop();
+  if (!slug) return null;
   return readJson<ShopRecord>(shopPath(slug));
 }
 
@@ -109,6 +137,8 @@ export async function activateShop(activationCode: string) {
 
 export async function getShopByAgentToken(token: string) {
   if (!token) return null;
+  if (token === "epa_demo_sandbox") return ensureDemoShop();
+
   const index = await readJson<{ slug: string }>(agentIndexPath(token));
   if (!index) return null;
 
