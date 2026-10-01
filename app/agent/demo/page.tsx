@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Order = {
   id: string;
@@ -55,7 +56,7 @@ export default function SandboxAgentPage() {
           <h1 style={{ margin: "8px 0 0", fontSize: 38 }}>Virtual Print Agent</h1>
           <p style={{ color: "#667085" }}>Demo Print Shop · simulated Windows agent and virtual printer</p>
         </div>
-        <a href="/admin/demo">Shop settings →</a>
+        <Link href="/admin/demo">Shop settings →</Link>
       </header>
 
       <section style={{ marginTop: 24, padding: 20, border: "1px solid #e5e7eb", borderRadius: 18, background: "#fff" }}>

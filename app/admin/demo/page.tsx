@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Service = { id: string; name: string; price: number; unit: string; active: boolean };
 
@@ -56,7 +57,7 @@ export default function ShopSettingsPage() {
       <header className="shop-header">
         <div className="brand-mark small">EP</div>
         <div><strong>Demo Print Shop</strong><span>Shop owner settings · Sandbox</span></div>
-        <a className="admin-link" href="/s/demo">Customer view →</a>
+        <Link className="admin-link" href="/s/demo">Customer view →</Link>
       </header>
       <section className="admin-hero">
         <p className="eyebrow">SHOP SETTINGS</p>
